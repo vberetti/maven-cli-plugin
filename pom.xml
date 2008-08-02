@@ -5,7 +5,7 @@
     <packaging>maven-plugin</packaging>
     <version>0.1-SNAPSHOT</version>
     <name>Maven CLI Plugin</name>
-    <url>http://maven.apache.org</url>
+    <url>http://github.com/mrdon/maven-cli-plugin/wikis</url>
     <prerequisites>
         <maven>2.0.6</maven>
     </prerequisites>
@@ -104,17 +104,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.twdata.maven</groupId>
-                <artifactId>maven-cli-plugin</artifactId>
-                <version>0.1-SNAPSHOT</version>
-                <configuration>
-                    <commands>
-                        <foo>clean compile jar</foo>
-                    </commands>
-                </configuration>
-            </plugin>
-
         </plugins>
     </build>
     <repositories>
