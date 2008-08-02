@@ -73,7 +73,9 @@ public class ExecuteCliMojo
         // build a list of command aliases
         Map<String,String> aliases = new HashMap<String,String>();
         aliases.putAll(defaultAliases);
-        aliases.putAll(commands);
+        if (commands != null) {
+            aliases.putAll(commands);
+        }
 
         getLog().info("Waiting for commands");
         try {
@@ -82,7 +84,7 @@ public class ExecuteCliMojo
 
             while ((line = readCommand(reader)) != null)
             {
-                if ("quit".equals(line)) {
+                if ("quit".equals(line) || "exit".equals(line)) {
                     break;
                 } else {
                     List<MojoCall> calls = new ArrayList<MojoCall>();
