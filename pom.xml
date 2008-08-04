@@ -89,6 +89,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>org.twdata.maven:mojo-executor</include>
+                                    <include>jline:jline</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
