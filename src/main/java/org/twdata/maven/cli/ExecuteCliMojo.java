@@ -7,6 +7,8 @@ import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.PluginManager;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.StringUtils;
+
 import static org.twdata.maven.mojoexecutor.MojoExecutor.*;
 
 import java.io.IOException;
@@ -17,6 +19,7 @@ import java.util.*;
  * Provides an interactive command line interface for Maven plugins, allowing users to execute plugins directly.
  *
  * @requiresDependencyResolution execute
+ * @aggregator true
  * @goal execute
  */
 public class ExecuteCliMojo
@@ -33,7 +36,24 @@ public class ExecuteCliMojo
         put("test", "org.apache.maven.plugins:maven-surefire-plugin:test");
         put("clean", "org.apache.maven.plugins:maven-clean-plugin:clean");
     }});
-
+    
+    private final List<String> listCommands = Collections
+			.unmodifiableList(new ArrayList<String>() {
+				{
+					add("list");
+					add("ls");
+				}
+			});
+    
+	private final List<String> exitCommands = Collections
+			.unmodifiableList(new ArrayList<String>() {
+				{
+					add("quit");
+					add("exit");
+					add("bye");
+				}
+			});
+	
     /**
      * Command aliases.  Commands should be in the form GROUP_ID:ARTIFACT_ID:GOAL
      *
@@ -67,6 +87,17 @@ public class ExecuteCliMojo
      */
     protected PluginManager pluginManager;
 
+	/**
+	 * The reactor projects.
+	 * 
+	 * @parameter expression="${reactorProjects}"
+	 * @required
+	 * @readonly
+	 */
+	protected List reactorProjects;
+	
+	protected Map<String, MavenProject> modules;
+	
     public void execute()
         throws MojoExecutionException
     {
@@ -76,17 +107,40 @@ public class ExecuteCliMojo
         if (commands != null) {
             aliases.putAll(commands);
         }
-
+		
+		modules = new HashMap<String, MavenProject>();
+		for (Object reactorProject : reactorProjects) {
+			modules.put(((MavenProject) reactorProject).getArtifactId(),
+					(MavenProject) reactorProject);
+		}
+		
+		// build list of commands available for completion
+		List<String> availableCommands = new ArrayList<String>();
+		availableCommands.addAll(aliases.keySet());
+		availableCommands.addAll(exitCommands);
+		availableCommands.addAll(listCommands);
+		// TODO add modules list to completion once call on specific module is implemented 
+		// availableCommands.addAll(modules.keySet());
+		
         getLog().info("Waiting for commands");
         try {
             ConsoleReader reader = new ConsoleReader(System.in, new OutputStreamWriter(System.out));
+			reader.addCompletor(new CommandsCompletor(availableCommands));
             String line;
 
             while ((line = readCommand(reader)) != null)
             {
-                if ("quit".equals(line) || "exit".equals(line)) {
-                    break;
-                } else {
+                if(StringUtils.isEmpty(line)){
+                	continue;
+                } else if (exitCommands.contains(line)) {
+					break;
+				} else if (listCommands.contains(line)) {
+					getLog().info("Listing available projects: ");
+					for (Object reactorProject : reactorProjects) {
+						getLog().info("* " + ((MavenProject) reactorProject)
+								.getArtifactId());
+					}
+				} else {
                     List<MojoCall> calls = new ArrayList<MojoCall>();
                     try {
                         parseCommand(line, aliases, calls);
