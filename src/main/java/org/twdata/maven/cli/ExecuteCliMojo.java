@@ -1,6 +1,24 @@
 package org.twdata.maven.cli;
 
+import static org.twdata.maven.mojoexecutor.MojoExecutor.artifactId;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.configuration;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.executeMojo;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.executionEnvironment;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.goal;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.groupId;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.plugin;
+import static org.twdata.maven.mojoexecutor.MojoExecutor.version;
+
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import jline.ConsoleReader;
+
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
@@ -9,61 +27,64 @@ import org.apache.maven.plugin.PluginManager;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.StringUtils;
 
-import static org.twdata.maven.mojoexecutor.MojoExecutor.*;
-
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.util.*;
-
 /**
- * Provides an interactive command line interface for Maven plugins, allowing users to execute plugins directly.
- *
+ * Provides an interactive command line interface for Maven plugins, allowing
+ * users to execute plugins directly.
+ * 
  * @requiresDependencyResolution execute
  * @aggregator true
  * @goal execute
  */
-public class ExecuteCliMojo
-    extends AbstractMojo
-{
-    private final Map<String,String> defaultAliases = Collections.unmodifiableMap(new HashMap<String,String>() {{
-        put("compile", "org.apache.maven.plugins:maven-compiler-plugin:compile");
-        put("testCompile", "org.apache.maven.plugins:maven-compiler-plugin:testCompile");
-        put("jar", "org.apache.maven.plugins:maven-jar-plugin:jar");
-        put("war", "org.apache.maven.plugins:maven-war-plugin:war");
-        put("resources", "org.apache.maven.plugins:maven-resources-plugin:resources");
-        put("install", "org.apache.maven.plugins:maven-install-plugin:install");
-        put("deploy", "org.apache.maven.plugins:maven-deploy-plugin:deploy");
-        put("test", "org.apache.maven.plugins:maven-surefire-plugin:test");
-        put("clean", "org.apache.maven.plugins:maven-clean-plugin:clean");
-    }});
-    
+public class ExecuteCliMojo extends AbstractMojo {
+    private final Map<String, String> defaultAliases = Collections
+            .unmodifiableMap(new HashMap<String, String>() {
+                {
+                    put("compile",
+                            "org.apache.maven.plugins:maven-compiler-plugin:compile");
+                    put("testCompile",
+                            "org.apache.maven.plugins:maven-compiler-plugin:testCompile");
+                    put("jar", "org.apache.maven.plugins:maven-jar-plugin:jar");
+                    put("war", "org.apache.maven.plugins:maven-war-plugin:war");
+                    put("resources",
+                            "org.apache.maven.plugins:maven-resources-plugin:resources");
+                    put("install",
+                            "org.apache.maven.plugins:maven-install-plugin:install");
+                    put("deploy",
+                            "org.apache.maven.plugins:maven-deploy-plugin:deploy");
+                    put("test",
+                            "org.apache.maven.plugins:maven-surefire-plugin:test");
+                    put("clean",
+                            "org.apache.maven.plugins:maven-clean-plugin:clean");
+                }
+            });
+
     private final List<String> listCommands = Collections
-			.unmodifiableList(new ArrayList<String>() {
-				{
-					add("list");
-					add("ls");
-				}
-			});
-    
-	private final List<String> exitCommands = Collections
-			.unmodifiableList(new ArrayList<String>() {
-				{
-					add("quit");
-					add("exit");
-					add("bye");
-				}
-			});
-	
+            .unmodifiableList(new ArrayList<String>() {
+                {
+                    add("list");
+                    add("ls");
+                }
+            });
+
+    private final List<String> exitCommands = Collections
+            .unmodifiableList(new ArrayList<String>() {
+                {
+                    add("quit");
+                    add("exit");
+                    add("bye");
+                }
+            });
+
     /**
-     * Command aliases.  Commands should be in the form GROUP_ID:ARTIFACT_ID:GOAL
-     *
+     * Command aliases. Commands should be in the form GROUP_ID:ARTIFACT_ID:GOAL
+     * 
      * @parameter
      */
-    private Map<String,String> commands;
+    private Map<String, String> commands;
 
     /**
      * The Maven Project Object
-     *
+     * 
      * @parameter expression="${project}"
      * @required
      * @readonly
@@ -72,7 +93,7 @@ public class ExecuteCliMojo
 
     /**
      * The Maven Session Object
-     *
+     * 
      * @parameter expression="${session}"
      * @required
      * @readonly
@@ -81,104 +102,97 @@ public class ExecuteCliMojo
 
     /**
      * The Maven PluginManager Object
-     *
+     * 
      * @component
      * @required
      */
     protected PluginManager pluginManager;
 
-	/**
-	 * The reactor projects.
-	 * 
-	 * @parameter expression="${reactorProjects}"
-	 * @required
-	 * @readonly
-	 */
-	protected List reactorProjects;
-	
-	protected Map<String, MavenProject> modules;
-	
-    public void execute()
-        throws MojoExecutionException
-    {
+    /**
+     * The reactor projects.
+     * 
+     * @parameter expression="${reactorProjects}"
+     * @readonly
+     */
+    protected List reactorProjects;
+
+    public void execute() throws MojoExecutionException {
         // build a list of command aliases
-        Map<String,String> aliases = new HashMap<String,String>();
+        Map<String, String> aliases = new HashMap<String, String>();
         aliases.putAll(defaultAliases);
         if (commands != null) {
             aliases.putAll(commands);
         }
-		
-		modules = new HashMap<String, MavenProject>();
-		for (Object reactorProject : reactorProjects) {
-			modules.put(((MavenProject) reactorProject).getArtifactId(),
-					(MavenProject) reactorProject);
-		}
-		
-		// build list of commands available for completion
-		List<String> availableCommands = new ArrayList<String>();
-		availableCommands.addAll(aliases.keySet());
-		availableCommands.addAll(exitCommands);
-		availableCommands.addAll(listCommands);
-		// TODO add modules list to completion once call on specific module is implemented 
-		// availableCommands.addAll(modules.keySet());
-		
+
+        // build list of commands available for completion
+        List<String> availableCommands = new ArrayList<String>();
+        availableCommands.addAll(aliases.keySet());
+        availableCommands.addAll(exitCommands);
+        availableCommands.addAll(listCommands);
+
         getLog().info("Waiting for commands");
         try {
-            ConsoleReader reader = new ConsoleReader(System.in, new OutputStreamWriter(System.out));
-			reader.addCompletor(new CommandsCompletor(availableCommands));
+            ConsoleReader reader = new ConsoleReader(System.in,
+                    new OutputStreamWriter(System.out));
+            reader.addCompletor(new CommandsCompletor(availableCommands));
+            reader.setDefaultPrompt("maven2> ");
             String line;
 
-            while ((line = readCommand(reader)) != null)
-            {
-                if(StringUtils.isEmpty(line)){
-                	continue;
+            while ((line = readCommand(reader)) != null) {
+                if (StringUtils.isEmpty(line)) {
+                    continue;
                 } else if (exitCommands.contains(line)) {
-					break;
-				} else if (listCommands.contains(line)) {
-					getLog().info("Listing available projects: ");
-					for (Object reactorProject : reactorProjects) {
-						getLog().info("* " + ((MavenProject) reactorProject)
-								.getArtifactId());
-					}
-				} else {
+                    break;
+                } else if (listCommands.contains(line)) {
+                    getLog().info("Listing available projects: ");
+                    for (Object reactorProject : reactorProjects) {
+                        getLog().info(
+                                "* "
+                                        + ((MavenProject) reactorProject)
+                                                .getArtifactId());
+                    }
+                } else {
                     List<MojoCall> calls = new ArrayList<MojoCall>();
                     try {
                         parseCommand(line, aliases, calls);
                     } catch (IllegalArgumentException ex) {
-                        getLog().error("Invalid command: "+line);
+                        getLog().error("Invalid command: " + line);
                         continue;
                     }
 
                     for (MojoCall call : calls) {
-                        getLog().info("Executing: "+call);
+                        getLog().info("Executing: " + call);
                         long start = System.currentTimeMillis();
-                        executeMojo(
-                            plugin(
-                                    groupId(call.getGroupId()),
-                                    artifactId(call.getArtifactId()),
-                                    version(call.getVersion(project))
-                            ),
-                            goal(call.getGoal()),
-                            configuration(),
-                            executionEnvironment(project, session, pluginManager)
-                        );
+                        executeMojo(plugin(groupId(call.getGroupId()),
+                                artifactId(call.getArtifactId()), version(call
+                                        .getVersion(project))), goal(call
+                                .getGoal()), configuration(),
+                                executionEnvironment(project, session,
+                                        pluginManager));
                         long now = System.currentTimeMillis();
-                        getLog().info("Execution time: "+(now - start)+" ms");
+                        getLog().info(
+                                "Execution time: " + (now - start) + " ms");
                     }
                 }
             }
         } catch (IOException e) {
-            throw new MojoExecutionException("Unable to execute cli commands", e);
-        } 
+            throw new MojoExecutionException("Unable to execute cli commands",
+                    e);
+        }
     }
 
     /**
      * Recursively parses commands to resolve all aliases
-     * @param text The text to evaluate
-     * @param aliases The list of aliases available
-     * @param commands The list of commands found so far
+     * 
+     * @param text
+     *            The text to evaluate
+     * @param aliases
+     *            The list of aliases available
+     * @param commands
+     *            The list of commands found so far
      */
-    private static void parseCommand(String text, Map<String,String> aliases, List<MojoCall> commands) {
+    private static void parseCommand(String text, Map<String, String> aliases,
+            List<MojoCall> commands) {
         String[] tokens = text.split(" ");
         if (tokens.length > 1) {
             for (String token : tokens) {
@@ -189,15 +203,13 @@ public class ExecuteCliMojo
         } else {
             String[] parsed = text.split(":");
             if (parsed.length < 3) {
-                throw new IllegalArgumentException("Invalid command: "+text);
+                throw new IllegalArgumentException("Invalid command: " + text);
             }
             commands.add(new MojoCall(parsed[0], parsed[1], parsed[2]));
         }
     }
 
     private String readCommand(ConsoleReader reader) throws IOException {
-        System.out.println("");
-        System.out.print("maven2> ");
         return reader.readLine();
     }
 
@@ -212,7 +224,6 @@ public class ExecuteCliMojo
             this.goal = goal;
         }
 
-
         public String getGroupId() {
             return groupId;
         }
@@ -226,16 +237,19 @@ public class ExecuteCliMojo
         }
 
         /**
-         * Tries to determine what version of the plugin has been already configured for this project.  If unknown,
-         * "RELEASE" is used.
-         * @param project The maven project
+         * Tries to determine what version of the plugin has been already
+         * configured for this project. If unknown, "RELEASE" is used.
+         * 
+         * @param project
+         *            The maven project
          * @return The discovered plugin version
          */
         public String getVersion(MavenProject project) {
             String version = null;
             List<Plugin> plugins = project.getBuildPlugins();
             for (Plugin plugin : plugins) {
-                if (groupId.equals(plugin.getGroupId()) && artifactId.equals(plugin.getArtifactId())) {
+                if (groupId.equals(plugin.getGroupId())
+                        && artifactId.equals(plugin.getArtifactId())) {
                     version = plugin.getVersion();
                     break;
                 }
@@ -244,7 +258,8 @@ public class ExecuteCliMojo
             if (version == null) {
                 plugins = project.getPluginManagement().getPlugins();
                 for (Plugin plugin : plugins) {
-                    if (groupId.equals(plugin.getGroupId()) && artifactId.equals(plugin.getArtifactId())) {
+                    if (groupId.equals(plugin.getGroupId())
+                            && artifactId.equals(plugin.getArtifactId())) {
                         version = plugin.getVersion();
                         break;
                     }

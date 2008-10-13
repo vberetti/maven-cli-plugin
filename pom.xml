@@ -7,7 +7,7 @@
     <name>Maven CLI Plugin</name>
     <url>http://github.com/mrdon/maven-cli-plugin/wikis</url>
     <prerequisites>
-        <maven>2.0.6</maven>
+        <maven>2.0.9</maven>
     </prerequisites>
     <dependencies>
         <dependency>
